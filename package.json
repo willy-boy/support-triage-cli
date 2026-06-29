@@ -1,0 +1,15 @@
+{
+  "name": "support-triage-cli",
+  "version": "1.0.0",
+  "description": "CLI de triage de tickets support avec classification P1-P4 et enrichissement IA",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "mock": "node mock-api/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
+    "dotenv": "^16.5.0"
+  }
+}
