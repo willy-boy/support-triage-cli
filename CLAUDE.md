@@ -8,56 +8,72 @@ CLI tool that simulates a Customer Success Engineer triaging a support ticket qu
 
 ## Commands
 
-Once implemented, the standard commands are:
+`node` is not in the Windows PATH — use the full path on this machine:
 
 ```powershell
-# Start the mock status API (must be running before the CLI)
-node mock-api/server.js
+# Start the mock status API (required before running the CLI)
+& "C:\Program Files\nodejs\node.exe" mock-api/server.js
 
-# Run the full triage pipeline → produces report.md
-node src/index.js
+# Run the full triage pipeline (with AI enrichment) → produces report.md
+& "C:\Program Files\nodejs\node.exe" src/index.js
 
-# Run tests (step 7)
-npm test
+# Run in watch mode — re-triages every 30s, AI enrichment disabled
+& "C:\Program Files\nodejs\node.exe" src/index.js --watch
+& "C:\Program Files\nodejs\node.exe" src/index.js --watch 10   # custom interval in seconds
+
+# Run all tests
+& "C:\Program Files\nodejs\node.exe" --test src/classifier.test.js
 ```
 
-Environment variable required for the AI step:
+Environment variable required for AI enrichment:
 ```
-ANTHROPIC_API_KEY=<your key>   # loaded via dotenv from .env
+ANTHROPIC_API_KEY=<your key>   # loaded via dotenv from .env (gitignored)
 ```
+If the key is absent, enrichment is silently skipped (one warning logged, pipeline continues).
 
 ## Architecture
 
 ```
 support-triage-cli/
-├── data/tickets_sample.csv     # input — 10 tickets, CSV
-├── docs/mock-api-spec.md       # API contract for the mock server
-├── mock-api/server.js          # local HTTP server (Node native or Express)
+├── data/tickets_sample.csv       # input — 10 tickets, CSV
+├── docs/mock-api-spec.md         # API contract for the mock server
+├── mock-api/server.js            # local HTTP server (Node native, port 3000)
 ├── src/
-│   ├── index.js                # entry point — orchestrates the pipeline
-│   ├── classifier.js           # P1–P4 rules (pure function, no I/O)
-│   ├── statusClient.js         # GET /status/:service calls
-│   ├── aiSummary.js            # Anthropic SDK calls for P1/P2
-│   └── reportWriter.js         # builds and writes report.md
-├── report.md                   # generated output
-├── .env                        # ANTHROPIC_API_KEY (gitignored)
-└── package.json
+│   ├── index.js                  # orchestrator — arg parsing, pipeline, watch loop
+│   ├── classifier.js             # P1–P4 rules (pure function, no I/O)
+│   ├── classifier.test.js        # node --test unit tests for all classification rules
+│   ├── statusClient.js           # GET /status/:service with in-memory cache
+│   ├── aiSummary.js              # Anthropic SDK calls for P1/P2 enrichment
+│   └── reportWriter.js           # builds and writes report.md
+├── postman/collections/          # exportable Postman collection with automated tests
+├── report.md                     # generated output (committed as sample)
+└── .env                          # ANTHROPIC_API_KEY (gitignored)
 ```
 
 ## Classification rules (P1–P4)
 
+Service status from the mock API takes precedence over the ticket's HTTP code.
+
 | Priority | Condition |
 |----------|-----------|
-| **P1** | Service status is `down`, OR HTTP 5xx with direct client impact |
-| **P2** | Service status is `degraded`, OR HTTP 429 (rate limit) |
-| **P3** | HTTP 401 or 403 (client-side misconfiguration) |
-| **P4** | Everything else (200 with complaint, latency, etc.) |
+| **P1** | Service status is `down`, OR HTTP 5xx |
+| **P2** | Service status is `degraded`, OR HTTP 429 |
+| **P3** | HTTP 401 or 403 |
+| **P4** | Everything else |
 
-Service status (from the mock API) takes precedence — a ticket on a `down` service is always P1 regardless of HTTP code.
+Unknown services (mock API 404) resolve to `{ status: 'unknown' }` and fall through to HTTP-code rules.
+
+## Key behaviors
+
+**statusClient** — 5 s timeout per request; on timeout, network error, or invalid JSON, resolves to `{ status: 'unknown' }` instead of rejecting (pipeline never crashes on a missing mock API). Results are cached in a `Map` for the process lifetime — each service is fetched once per run.
+
+**aiSummary** — enriches P1/P2 tickets with `aiSummary` (one client-facing sentence) and `aiAction` (recommended action). On any error (auth, network, malformed JSON from Claude), returns the ticket unchanged. Handles markdown-wrapped JSON in the model response via `extractJson()`. Disabled automatically in `--watch` mode.
+
+**watch mode** — `setInterval`-based loop; AI enrichment is always off to avoid per-cycle API costs. Each cycle prints a timestamped separator and overwrites `report.md`.
 
 ## Mock API contract
 
-The local server implements `GET /status/:service` and responds with `{ service, status, lastIncident }`. Known services and their fixed statuses:
+`GET /status/:service` → `{ service, status, lastIncident }` (200) or `{ error: "unknown service" }` (404).
 
 | service | status |
 |---|---|
@@ -65,19 +81,3 @@ The local server implements `GET /status/:service` and responds with `{ service,
 | auth-service | down |
 | search-api | healthy |
 | notifications-api | healthy |
-
-Unknown services → HTTP 404 `{ "error": "unknown service" }`.
-
-## AI enrichment
-
-For P1 and P2 tickets only, call Claude via `@anthropic-ai/sdk`. Each call should produce:
-- A one-sentence client-facing summary
-- A recommended action
-
-The AI output is supplementary — classification is always determined by the rule-based classifier first. Always cross-check AI severity judgement against the coded rules.
-
-## Key constraints
-
-- Node.js only — no external framework required (native `http` module is fine for the mock server).
-- Read `ANTHROPIC_API_KEY` from `.env` via `dotenv`; never hardcode it.
-- `report.md` groups tickets by severity (P1 first), includes id, customer, service, severity, and AI summary where applicable.
