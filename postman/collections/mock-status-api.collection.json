@@ -1,0 +1,180 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Support Triage — Mock Status API",
+    "description": "Collection de test pour le mock GET /status/:service.\nServeur local : node mock-api/server.js",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Services connus",
+      "item": [
+        {
+          "name": "billing-api — degraded",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('service = billing-api', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.service).to.eql('billing-api');",
+                  "});",
+                  "pm.test('status = degraded', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('degraded');",
+                  "});",
+                  "pm.test('lastIncident présent', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('lastIncident');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/billing-api",
+              "host": ["{{base_url}}"],
+              "path": ["status", "billing-api"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "auth-service — down",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('service = auth-service', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.service).to.eql('auth-service');",
+                  "});",
+                  "pm.test('status = down', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('down');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/auth-service",
+              "host": ["{{base_url}}"],
+              "path": ["status", "auth-service"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "search-api — healthy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status = healthy', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('healthy');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/search-api",
+              "host": ["{{base_url}}"],
+              "path": ["status", "search-api"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "notifications-api — healthy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status = healthy', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('healthy');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/notifications-api",
+              "host": ["{{base_url}}"],
+              "path": ["status", "notifications-api"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cas d'erreur",
+      "item": [
+        {
+          "name": "service inconnu — 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('body contient error', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('error');",
+                  "  pm.expect(body.error).to.eql('unknown service');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status/inconnu-api",
+              "host": ["{{base_url}}"],
+              "path": ["status", "inconnu-api"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
