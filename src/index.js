@@ -9,11 +9,22 @@ const { writeReport } = require('./reportWriter');
 const CSV_PATH    = path.join(__dirname, '../data/tickets_sample.csv');
 const REPORT_PATH = path.join(__dirname, '../report.md');
 
-async function main() {
-  const tickets = readTickets(CSV_PATH);
-  console.log(`${tickets.length} tickets chargés.`);
+// --watch [interval_seconds]
+const args = process.argv.slice(2);
+const watchIdx = args.indexOf('--watch');
+const isWatch = watchIdx !== -1;
+const intervalSec = (() => {
+  const next = args[watchIdx + 1];
+  const parsed = parseInt(next, 10);
+  return isWatch && !isNaN(parsed) && parsed > 0 ? parsed : 30;
+})();
 
-  // Classification
+async function runPipeline(withAI) {
+  const ts = new Date().toLocaleTimeString('fr-FR');
+  console.log(`\n─── Triage ${ts} ───`);
+
+  const tickets = readTickets(CSV_PATH);
+
   const classified = await Promise.all(
     tickets.map(async ticket => {
       const serviceStatus = await getStatus(ticket.service);
@@ -25,18 +36,31 @@ async function main() {
   classified.forEach(t => counts[t.severity]++);
   console.log('Classification :', counts);
 
-  // Enrichissement IA (P1/P2 uniquement, optionnel)
-  const enriched = await Promise.all(
-    classified.map(async ticket => {
-      if (ticket.severity === 'P1' || ticket.severity === 'P2') {
-        return enrich(ticket);
-      }
-      return ticket;
-    })
-  );
+  const enriched = withAI
+    ? await Promise.all(
+        classified.map(ticket =>
+          ticket.severity === 'P1' || ticket.severity === 'P2'
+            ? enrich(ticket)
+            : ticket
+        )
+      )
+    : classified;
 
   writeReport(enriched, REPORT_PATH);
   console.log('Rapport généré : report.md');
+}
+
+async function main() {
+  if (isWatch) {
+    console.log(`Mode watch — intervalle : ${intervalSec}s | Ctrl+C pour arrêter | enrichissement IA désactivé`);
+    await runPipeline(false);
+    setInterval(
+      () => runPipeline(false).catch(err => console.error('Erreur :', err.message)),
+      intervalSec * 1000
+    );
+  } else {
+    await runPipeline(true);
+  }
 }
 
 main().catch(err => {
