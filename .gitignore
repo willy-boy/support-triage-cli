@@ -1,3 +1,7 @@
 node_modules/
 .env
 .postman/
+
+# Guide perso (reste en local uniquement)
+EXERCICES_CLAUDE_CODE.md
+.claude/settings.local.json
